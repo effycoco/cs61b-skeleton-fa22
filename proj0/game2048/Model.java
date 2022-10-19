@@ -62,7 +62,7 @@ public class Model extends Observable {
         return _board.size();
     }
 
-    /** Return true iff the game is over (there are no moves, or
+    /** Return true if the game is over (there are no moves, or
      *  there is a tile with value 2048 on the board). */
     public boolean gameOver() {
         checkGameOver();
@@ -115,10 +115,62 @@ public class Model extends Observable {
      *    value, then the leading two tiles in the direction of motion merge,
      *    and the trailing tile does not.
      */
-    public void tilt(Side side) {
+    public boolean tilt(Side side) {
+        boolean changed=false;
         // TODO: Fill in this function.
+        _board.setViewingPerspective(side);
+        int size=_board.size();
+
+        for(int c=0;c< size;c++){
+            /** 为满足条件2，列内移动时不应有连续两次移动都是合并 */
+            boolean lastMoveIsMerge=false;
+            for(int r= size-2;r>=0;r--){
+                Tile t=_board.tile(c,r);
+                if(t!=null){
+                    // 假如最上格是null，意味着前面全是空格，直接挪到最上面
+                    if(_board.tile(c,size-1)==null){
+                        lastMoveIsMerge=_board.move(c,size-1,t);
+                        changed=true;
+                        // 跳过本次循环下面部分，直接看下一个格子
+                        continue;
+                    }
+                    // 找出t上面与t最近的非null格的行号
+                    int neighborRow=size-1; // 赋值仅为了不报错
+                    for(int i=size-2;i>r;i--){
+                        if(_board.tile(c,i)==null){
+                            neighborRow=i+1;
+                            break;
+                        }
+                        // 能运行到这里说明上面无空格
+                        if(i==r+1){
+                            neighborRow=r+1;
+                        }
+                    }
+                    Tile neighborTile=_board.tile(c,neighborRow);
+                    if(neighborTile==null){
+                        // 此条件方便debug
+                        System.out.println("Weird! Neighbor tile should not be null!");
+                    }else if(neighborTile.value()==t.value()&&!lastMoveIsMerge){
+                        // 当相邻格与本格相等时，如果上次移动不伴随合并，则移动到相邻格（合并）
+                       lastMoveIsMerge= _board.move(c,neighborRow,t);
+                       _score+=t.value()*2;
+                       changed=true;
+                    }else if(neighborRow>r+1){
+                        // 否则应移动到相邻格的下一格（括号内条件避免移动到原位置）
+                        lastMoveIsMerge=_board.move(c,neighborRow-1,t);
+                    }
+
+                }
+            }
+        }
+
+        _board.setViewingPerspective(Side.NORTH);
 
         checkGameOver();
+        if(changed){
+            setChanged();
+        }
+        return changed;
     }
 
     /** Checks if the game is over and sets the gameOver variable
@@ -138,6 +190,20 @@ public class Model extends Observable {
      */
     public static boolean emptySpaceExists(Board b) {
         // TODO: Fill in this function.
+
+        // 应该循环每行每列的格子，看其值是不是null
+        // b.tile(0,0) 返回左下角格子的值
+        // b.size() 返回 4 代表4行4列
+//        System.out.println(b.tile(0,0).value());
+//        System.out.println(b.size());
+
+        int size=b.size();
+        for(int i=0;i<size;i++){
+            for(int j=0;j<size;j++){
+                if(b.tile(i,j)==null) return true;
+            }
+        }
+
         return false;
     }
 
@@ -148,6 +214,12 @@ public class Model extends Observable {
      */
     public static boolean maxTileExists(Board b) {
         // TODO: Fill in this function.
+        int size=b.size();
+        for(int col=0;col<size;col++){
+            for(int row=0;row<size;row++){
+                if(b.tile(col,row)!=null&&b.tile(col,row).value()==MAX_PIECE)return true;
+            }
+        }
         return false;
     }
 
@@ -159,8 +231,33 @@ public class Model extends Observable {
      */
     public static boolean atLeastOneMoveExists(Board b) {
         // TODO: Fill in this function.
+        if(emptySpaceExists(b)) return true;
+        // 判断是否存在相邻等值
+        int size=b.size();
+        // 循环方格，左下角到倒数第二行倒数第二列，
+        // 每个方格检查上方和右方是否相同
+        for(int col=0;col<size-1;col++){
+            for(int row=0;row<size-1;row++){
+                if(b.tile(col,row).value()==b.tile(col,row+1).value()||b.tile(col,row).value()==b.tile(col+1,row).value()){
+                    return true;
+                }
+            }
+        }
+        // 最上排检查左右相邻，最右列检查上下相邻
+        for(int col=0;col<size-1;col++){
+            if(b.tile(col,size-1).value()==b.tile(col+1,size-1).value()){
+                return true;
+            }
+        }
+        for(int row=0;row<size-1;row++){
+            if(b.tile(size-1,row).value()==b.tile(size-1,row+1).value()){
+                return true;
+            }
+        }
+
         return false;
     }
+
 
     /** Returns the model as a string, used for debugging. */
     @Override
